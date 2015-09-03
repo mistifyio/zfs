@@ -441,6 +441,9 @@ zfs_prop_init(void)
 	zprop_register_hidden(ZFS_PROP_INCONSISTENT, "inconsistent",
 	    PROP_TYPE_NUMBER, PROP_READONLY, ZFS_TYPE_DATASET, "INCONSISTENT");
 
+	zprop_register_hidden(ZFS_PROP_NAMESPACE, "namespace", PROP_TYPE_NUMBER,
+	    PROP_INHERIT, ZFS_TYPE_DATASET, "NAMESPACE");
+
 	/*
 	 * Property to be removed once libbe is integrated
 	 */

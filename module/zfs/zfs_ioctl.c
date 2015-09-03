@@ -633,6 +633,7 @@ zfs_secpolicy_setprop(const char *dsname, zfs_prop_t prop, nvpair_t *propval,
 	default:
 		break;
 	case ZFS_PROP_ZONED:
+	case ZFS_PROP_NAMESPACE:
 		/*
 		 * Disallow setting of 'zoned' from within a local zone.
 		 */

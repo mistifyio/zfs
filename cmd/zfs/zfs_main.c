@@ -102,6 +102,7 @@ static int zfs_do_holds(int argc, char **argv);
 static int zfs_do_release(int argc, char **argv);
 static int zfs_do_diff(int argc, char **argv);
 static int zfs_do_bookmark(int argc, char **argv);
+static int zfs_do_namespace(int argc, char **argv);
 
 /*
  * Enable a reasonable set of defaults for libumem debugging on DEBUG builds.
@@ -149,6 +150,7 @@ typedef enum {
 	HELP_RELEASE,
 	HELP_DIFF,
 	HELP_BOOKMARK,
+	HELP_NAMESPACE,
 } zfs_help_t;
 
 typedef struct zfs_command {
@@ -197,6 +199,8 @@ static zfs_command_t command_table[] = {
 	{ "allow",	zfs_do_allow,		HELP_ALLOW		},
 	{ NULL },
 	{ "unallow",	zfs_do_unallow,		HELP_UNALLOW		},
+	{ NULL },
+	{ "namespace",	zfs_do_namespace,	HELP_NAMESPACE		},
 	{ NULL },
 	{ "hold",	zfs_do_hold,		HELP_HOLD		},
 	{ "holds",	zfs_do_holds,		HELP_HOLDS		},
@@ -317,6 +321,9 @@ get_usage(zfs_help_t idx)
 		    "[snapshot|filesystem]\n"));
 	case HELP_BOOKMARK:
 		return (gettext("\tbookmark <snapshot> <bookmark>\n"));
+	case HELP_NAMESPACE:
+		return (gettext("\tnamespace <id> "
+		    "<filesystem|volume|snapshot> ...\n"));
 	}
 
 	abort();
@@ -6645,6 +6652,72 @@ zfs_do_bookmark(int argc, char **argv)
 usage:
 	usage(B_FALSE);
 	return (-1);
+}
+
+/*
+ * zfs namespace id { fs | snap | vol } ...
+ *
+ * Delegates to the namespace ID specified on the command line.
+ */
+typedef struct namespace_cbdata {
+	uint64_t	cb_id;
+} namespace_cbdata_t;
+
+static int
+namespace_callback(zfs_handle_t *zhp, void *data)
+{
+	char buf[64];
+	namespace_cbdata_t *cbp = data;
+
+	(void) snprintf(buf, sizeof (buf), "%llu", (longlong_t)cbp->cb_id);
+
+	if (zfs_prop_set(zhp, zfs_prop_to_name(ZFS_PROP_NAMESPACE), buf) != 0) {
+		return (1);
+	}
+
+	if (zfs_prop_set(zhp, zfs_prop_to_name(ZFS_PROP_ZONED),
+		(cbp->cb_id == 0) ? "off" : "on") != 0) {
+		return (1);
+	}
+	return (0);
+}
+
+static int
+zfs_do_namespace(int argc, char **argv)
+{
+	namespace_cbdata_t cb;
+	int ret = 0;
+	char *tmp;
+
+	/* check for options */
+	if (argc > 1 && argv[1][0] == '-') {
+		(void) fprintf(stderr, gettext("invalid option '%c'\n"),
+		    argv[1][1]);
+		usage(B_FALSE);
+	}
+
+	/* check number of arguments */
+	if (argc < 2) {
+		(void) fprintf(stderr, gettext("missing namespace ID\n"));
+		usage(B_FALSE);
+	}
+	if (argc < 3) {
+		(void) fprintf(stderr, gettext("missing dataset name\n"));
+		usage(B_FALSE);
+	}
+
+	/* validate id argument */
+	cb.cb_id = (uint64_t)strtol(argv[1], &tmp, 0);
+	if ((*tmp != '\0') || (argv[1] == '\0')) {
+		(void) fprintf(stderr, gettext("invalid namespace ID "
+		    "'%s'\n"), argv[1]);
+		usage(B_FALSE);
+	}
+
+	ret = zfs_for_each(argc - 2, argv + 2, 0,
+	    ZFS_TYPE_DATASET, NULL, NULL, 0, namespace_callback, &cb);
+
+	return (ret);
 }
 
 int
